@@ -9,6 +9,7 @@ const CONFIG = {
     linkedin: "https://www.linkedin.com/in/정민-이-840587357/",
     github: "Jungminii-1114",
     instagram: "https://www.instagram.com/2__jungminii/",
+    velog: "https://velog.io/@jm_mg_se/posts",
   },
   projects: [
     {
