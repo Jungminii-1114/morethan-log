@@ -5,9 +5,22 @@ import {
   AiOutlineGithub,
   AiOutlineInstagram,
   AiOutlineMail,
+  AiOutlineRead,
 } from "react-icons/ai"
 import { CONFIG } from "site.config"
 import { Emoji } from "src/components/Emoji"
+
+const getProfileUrl = (value: string, baseUrl: string) => {
+  const trimmedValue = value.trim()
+  if (/^https?:\/\//i.test(trimmedValue)) return trimmedValue
+  return `${baseUrl}${trimmedValue.replace(/^\/+/, "")}`
+}
+
+const getVelogUrl = (value: string) => {
+  const trimmedValue = value.trim()
+  if (/^https?:\/\//i.test(trimmedValue)) return trimmedValue
+  return `https://velog.io/@${trimmedValue.replace(/^@/, "")}`
+}
 
 const ContactCard: React.FC = () => {
   return (
@@ -18,7 +31,7 @@ const ContactCard: React.FC = () => {
       <StyledWrapper>
         {CONFIG.profile.github && (
           <a
-            href={`https://github.com/${CONFIG.profile.github}`}
+            href={getProfileUrl(CONFIG.profile.github, "https://github.com/")}
             rel="noreferrer"
             target="_blank"
           >
@@ -28,7 +41,10 @@ const ContactCard: React.FC = () => {
         )}
         {CONFIG.profile.instagram && (
           <a
-            href={`https://www.instagram.com/${CONFIG.profile.instagram}`}
+            href={getProfileUrl(
+              CONFIG.profile.instagram,
+              "https://www.instagram.com/"
+            )}
             rel="noreferrer"
             target="_blank"
           >
@@ -49,12 +65,25 @@ const ContactCard: React.FC = () => {
         )}
         {CONFIG.profile.linkedin && (
           <a
-            href={`https://www.linkedin.com/in/${CONFIG.profile.linkedin}`}
+            href={getProfileUrl(
+              CONFIG.profile.linkedin,
+              "https://www.linkedin.com/in/"
+            )}
             rel="noreferrer"
             target="_blank"
           >
             <AiFillLinkedin className="icon" />
             <div className="name">linkedin</div>
+          </a>
+        )}
+        {CONFIG.profile.velog && (
+          <a
+            href={getVelogUrl(CONFIG.profile.velog)}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <AiOutlineRead className="icon" />
+            <div className="name">velog</div>
           </a>
         )}
       </StyledWrapper>
