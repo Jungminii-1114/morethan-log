@@ -33,7 +33,32 @@ export const getPosts = async () => {
     return []
   } else {
     // Construct Data
-    const pageIds = getAllPageIds(response)
+    let pageIds = getAllPageIds(response)
+    if (!pageIds.length) {
+      const collectionId =
+        rawMetadata?.collection_id ??
+        rawMetadata?.format?.collection_pointer?.id ??
+        Object.keys(response.collection)[0]
+      const collectionViewId =
+        rawMetadata?.view_ids?.[0] ?? Object.keys(response.collection_view)[0]
+      const collectionViewValue = response.collection_view[collectionViewId]
+        ?.value as any
+      const collectionView = collectionViewValue?.value ?? collectionViewValue
+
+      if (collectionId && collectionViewId && collectionView) {
+        const collectionData = await api.getCollectionData(
+          collectionId,
+          collectionViewId,
+          collectionView
+        )
+
+        Object.assign(block, collectionData.recordMap.block)
+        const reducerResults = (collectionData.result as any)?.reducerResults
+        pageIds =
+          reducerResults?.collection_group_results?.blockIds ?? []
+      }
+    }
+
     const data = []
     for (let i = 0; i < pageIds.length; i++) {
       const id = pageIds[i]
