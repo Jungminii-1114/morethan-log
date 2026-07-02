@@ -1,17 +1,10 @@
 import { NotionAPI } from "notion-client"
 import { ExtendedRecordMap } from "notion-types"
 import { getBlockCollectionId, getPageContentBlockIds } from "notion-utils"
-import type { OptionsOfJSONResponseBody } from "got"
+import { NOTION_GOT_OPTIONS, withNotionRetry } from "./notionOptions"
 
 const RECORD_MAP_CHUNK_LIMIT = 1000
 const MISSING_BLOCK_BATCH_SIZE = 100
-const NOTION_GOT_OPTIONS: OptionsOfJSONResponseBody = {
-  retry: {
-    limit: 5,
-    methods: ["POST"],
-    statusCodes: [429, 500, 502, 503, 504],
-  },
-}
 
 const mergeRecordMapValues = (
   recordMap: ExtendedRecordMap,
@@ -74,6 +67,37 @@ const chunk = <T>(items: T[], size: number) => {
   return chunks
 }
 
+const fetchBlockBatch = async (
+  api: NotionAPI,
+  recordMap: ExtendedRecordMap,
+  blockIds: string[]
+) => {
+  try {
+    const response = await withNotionRetry(
+      () => api.getBlocks(blockIds, NOTION_GOT_OPTIONS),
+      `NotionAPI getBlocks(${blockIds.length})`
+    )
+    const nextRecordMap = unwrapRecordMapValues(
+      response.recordMap as ExtendedRecordMap
+    )
+    mergeRecordMapValues(recordMap, nextRecordMap)
+  } catch (error) {
+    if (blockIds.length === 1) {
+      console.warn(
+        "NotionAPI getBlock error",
+        blockIds[0],
+        error instanceof Error ? error.message : error
+      )
+      return
+    }
+
+    const smallerBatchSize = Math.max(1, Math.ceil(blockIds.length / 2))
+    for (const smallerBlockIds of chunk(blockIds, smallerBatchSize)) {
+      await fetchBlockBatch(api, recordMap, smallerBlockIds)
+    }
+  }
+}
+
 const fetchMissingBlocks = async (
   api: NotionAPI,
   recordMap: ExtendedRecordMap
@@ -92,11 +116,7 @@ const fetchMissingBlocks = async (
     seenPendingSets.add(pendingKey)
 
     for (const blockIds of chunk(pendingBlockIds, MISSING_BLOCK_BATCH_SIZE)) {
-      const response = await api.getBlocks(blockIds, NOTION_GOT_OPTIONS)
-      const nextRecordMap = unwrapRecordMapValues(
-        response.recordMap as ExtendedRecordMap
-      )
-      mergeRecordMapValues(recordMap, nextRecordMap)
+      await fetchBlockBatch(api, recordMap, blockIds)
     }
   }
 }
@@ -128,13 +148,17 @@ const fetchCollections = async (
     const collectionView = recordMap.collection_view[collectionViewId]?.value
 
     try {
-      const collectionData = await api.getCollectionData(
-        collectionId,
-        collectionViewId,
-        collectionView,
-        {
-          gotOptions: NOTION_GOT_OPTIONS,
-        }
+      const collectionData = await withNotionRetry(
+        () =>
+          api.getCollectionData(
+            collectionId,
+            collectionViewId,
+            collectionView,
+            {
+              gotOptions: NOTION_GOT_OPTIONS,
+            }
+          ),
+        `NotionAPI getCollectionData(${collectionId})`
       )
       const nextRecordMap = unwrapRecordMapValues(
         collectionData.recordMap as ExtendedRecordMap
@@ -157,10 +181,14 @@ const fetchCollections = async (
 
 export const getRecordMap = async (pageId: string) => {
   const api = new NotionAPI()
-  const page = await api.getPageRaw(pageId, {
-    chunkLimit: RECORD_MAP_CHUNK_LIMIT,
-    gotOptions: NOTION_GOT_OPTIONS,
-  })
+  const page = await withNotionRetry(
+    () =>
+      api.getPageRaw(pageId, {
+        chunkLimit: RECORD_MAP_CHUNK_LIMIT,
+        gotOptions: NOTION_GOT_OPTIONS,
+      }),
+    `NotionAPI getPageRaw(${pageId})`
+  )
   const recordMap = unwrapRecordMapValues(page.recordMap as ExtendedRecordMap)
 
   recordMap.collection = recordMap.collection ?? {}

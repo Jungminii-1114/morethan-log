@@ -5,6 +5,7 @@ import { idToUuid } from "notion-utils"
 import getAllPageIds from "src/libs/utils/notion/getAllPageIds"
 import getPageProperties from "src/libs/utils/notion/getPageProperties"
 import { TPosts } from "src/types"
+import { NOTION_GOT_OPTIONS, withNotionRetry } from "./notionOptions"
 
 /**
  * @param {{ includePages: boolean }} - false: posts only / true: include pages
@@ -15,7 +16,10 @@ export const getPosts = async () => {
   let id = CONFIG.notionConfig.pageId as string
   const api = new NotionAPI()
 
-  const response = await api.getPage(id)
+  const response = await withNotionRetry(
+    () => api.getPage(id, { gotOptions: NOTION_GOT_OPTIONS }),
+    `NotionAPI getPage(${id})`
+  )
   id = idToUuid(id)
   const collectionValue = Object.values(response.collection)[0]?.value as any
   const collection = collectionValue?.value ?? collectionValue
@@ -46,16 +50,22 @@ export const getPosts = async () => {
       const collectionView = collectionViewValue?.value ?? collectionViewValue
 
       if (collectionId && collectionViewId && collectionView) {
-        const collectionData = await api.getCollectionData(
-          collectionId,
-          collectionViewId,
-          collectionView
+        const collectionData = await withNotionRetry(
+          () =>
+            api.getCollectionData(
+              collectionId,
+              collectionViewId,
+              collectionView,
+              {
+                gotOptions: NOTION_GOT_OPTIONS,
+              }
+            ),
+          `NotionAPI getCollectionData(${collectionId})`
         )
 
         Object.assign(block, collectionData.recordMap.block)
         const reducerResults = (collectionData.result as any)?.reducerResults
-        pageIds =
-          reducerResults?.collection_group_results?.blockIds ?? []
+        pageIds = reducerResults?.collection_group_results?.blockIds ?? []
       }
     }
 
@@ -65,9 +75,7 @@ export const getPosts = async () => {
       const properties = (await getPageProperties(id, block, schema)) || null
       // Add fullwidth, createdtime to properties
       const pageBlockValue = (block[id].value as any)?.value ?? block[id].value
-      properties.createdTime = new Date(
-        pageBlockValue?.created_time
-      ).toString()
+      properties.createdTime = new Date(pageBlockValue?.created_time).toString()
       properties.fullWidth =
         (pageBlockValue?.format as any)?.page_full_width ?? false
 
